@@ -84,7 +84,7 @@ try {
   if(!chrome)throw new Error('Google Chrome is required');
   const token='/'+randomBytes(24).toString('hex');
   const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>${app} · 启动动画</title>
-  <style>html,body{margin:0;background:#06060d;overflow:hidden}</style><body>
+  <style>html,body{margin:0;width:100%;height:100%;background:#06060d;overflow:hidden}</style><body>
   <script src="${token}/player.js"></script><script>
   (async()=>{
     await CodexStartup.mount({url:'${token}/video',duration:60,volume:${config.volume},muted:${config.muted},holdAtEnd:true});
@@ -136,7 +136,7 @@ try {
   const url=`http://127.0.0.1:${server.address().port}${token}`;
   browser=spawn(chrome,['--no-first-run','--no-default-browser-check','--disable-extensions','--disable-background-networking','--disable-sync',
     '--disable-features=ChromeSignin,SigninIntercept','--disable-background-mode','--autoplay-policy=no-user-gesture-required',
-    '--remote-debugging-port=0','--user-data-dir='+profile,'--app='+url,'--window-size=1280,800'],{windowsHide:false,stdio:'ignore'});
+    '--remote-debugging-port=0','--user-data-dir='+profile,'--app='+url,'--start-fullscreen','--hide-scrollbars'],{windowsHide:false,stdio:'ignore'});
   trace.splashPid=browser.pid;
   lastHeartbeat=Date.now();
   heartbeatTimer=setInterval(()=>{if(Date.now()-lastHeartbeat>12000)finish('renderer-unresponsive');},500);

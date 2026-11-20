@@ -57,4 +57,7 @@ if($Delayed -and $ready -le $ended){throw 'Delayed readiness did not hold the la
 if(-not $geometry){throw 'Splash geometry did not match target window'}
 $handoffWindow=Get-TargetWindow $target
 if($handoffWindow -eq [IntPtr]::Zero -or -not [AppBootNative]::Visible($handoffWindow)){throw 'Application not visible after video'}
+$screen=[AppBootNative]::ScreenBounds($handoffWindow);$bounds=New-Object AppBootNative+Rect
+[AppBootNative]::GetWindowRect($handoffWindow,[ref]$bounds) | Out-Null
+if($bounds.Left -ne $screen.Left -or $bounds.Top -ne $screen.Top -or $bounds.Right -ne $screen.Right -or $bounds.Bottom -ne $screen.Bottom){throw 'Application did not stay fullscreen after playback'}
 [pscustomobject]@{App=$App;Delayed=[bool]$Delayed;FullFilm=$true;GeometryMatched=$geometry;ReadySeconds=[Math]::Round(($ready-$first).TotalSeconds,2);FilmSeconds=[Math]::Round(($ended-$first).TotalSeconds,2);Result='PASS'} | ConvertTo-Json -Compress

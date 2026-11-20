@@ -54,6 +54,9 @@ try{
   const gone=()=>until('!window.CodexStartup.status().active && !document.getElementById("codex-reference-startup")');
   assert.equal((await mount()).ok,true);
   await until('window.CodexStartup.status().phase==="playing"');
+  assert.equal(await cdp.evaluate('getComputedStyle(document.getElementById("codex-reference-startup").shadowRoot.querySelector(".tools")).display'),'none');
+  assert.equal(await cdp.evaluate('getComputedStyle(document.getElementById("codex-reference-startup").shadowRoot.querySelector(".hint")).display'),'none');
+  assert.equal(await cdp.evaluate('getComputedStyle(document.getElementById("codex-reference-startup").shadowRoot.querySelector("video")).objectFit'),'cover');
   const s=await status();assert.ok(s.duration>14&&s.duration<14.4);assert.ok(s.hasFrame);
   assert.equal((await mount()).duplicate,true);
   assert.equal(await cdp.evaluate('document.querySelectorAll("#codex-reference-startup").length'),1);

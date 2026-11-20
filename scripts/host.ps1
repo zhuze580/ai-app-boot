@@ -9,6 +9,7 @@
     [switch]$CheckOnly
 )
 $ErrorActionPreference='Stop'
+$hiddenTools=@()
 . (Join-Path $PSScriptRoot 'apps.ps1')
 function Write-Status($Status) {
     if ($StatusFile) { [IO.File]::WriteAllText($StatusFile,($Status | ConvertTo-Json -Compress),(New-Object Text.UTF8Encoding($false))) }
@@ -34,22 +35,31 @@ try {
     $chrome=Get-Process -Id $ChromePid -ErrorAction Stop
     $command=(Get-CimInstance Win32_Process -Filter ('ProcessId='+$ChromePid)).CommandLine
     if ($chrome.ProcessName -ne 'chrome' -or -not $ProfilePath -or -not $command.Contains($ProfilePath)) { throw 'Unverified splash process.' }
-    $consecutive=0;$ready=$false;$splash=[IntPtr]::Zero;$lastRect=''
+    $consecutive=0;$ready=$false;$splash=[IntPtr]::Zero;$lastRect='';$mainWindow=[IntPtr]::Zero;$screenKey=''
     while (Test-Path -LiteralPath $ControlFile) {
         $chrome.Refresh()
         if ($chrome.HasExited) { break }
         $window=Get-TargetWindow $target
         $status=@{app=$App;ready=$false;failed=$false}
         if ($window -ne [IntPtr]::Zero) {
+            $screen=[AppBootNative]::ScreenBounds($window)
+            $nextScreenKey="$($screen.Left),$($screen.Top),$($screen.Right),$($screen.Bottom)"
+            if ($window -ne $mainWindow -or $nextScreenKey -ne $screenKey) {
+                [AppBootNative]::Fullscreen($window)
+                $hiddenTools=@([AppBootNative]::HideTools($window))
+                Start-Sleep -Milliseconds 120
+                $mainWindow=$window;$screenKey=$nextScreenKey
+            }
             if ([AppBootNative]::IsIconic($window)) { [AppBootNative]::Restore($window) }
             $rect=New-Object AppBootNative+Rect
-            if ([AppBootNative]::GetWindowRect($window,[ref]$rect) -and $rect.Right-$rect.Left -gt 200) {
+            $rect=[AppBootNative]::ScreenBounds($window)
+            if ($rect.Right-$rect.Left -gt 200) {
                 $status.window=$window.ToInt64();$status.x=$rect.Left;$status.y=$rect.Top
                 $status.width=$rect.Right-$rect.Left;$status.height=$rect.Bottom-$rect.Top
                 if($codexConnection){$status.codexConnection=$codexConnection}
                 if ($splash -eq [IntPtr]::Zero) { $splash=[AppBootNative]::Find([uint32]$ChromePid) }
                 $key="$($status.x),$($status.y),$($status.width),$($status.height)"
-                if ($splash -ne [IntPtr]::Zero) {
+                if ($splash -ne [IntPtr]::Zero -and $key -ne $lastRect) {
                     [AppBootNative]::Cover($splash,$rect) | Out-Null
                     $lastRect=$key
                 }
@@ -73,4 +83,6 @@ try {
     Write-Status @{app=$App;ready=$false;failed=$true;error=$_.Exception.Message}
     Write-Error $_.Exception.Message
     exit 1
+} finally {
+    foreach($tool in $hiddenTools){if([AppBootNative]::IsWindow($tool)){[AppBootNative]::ShowWindowAsync($tool,4) | Out-Null}}
 }

@@ -25,6 +25,25 @@ public static class AppBootNative {
     [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
     [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h,int attr,ref int value,int size);
     [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h,int attr,out int value,int size);
+    [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr h,uint flags);
+    [StructLayout(LayoutKind.Sequential)] struct MonitorInfo {public int Size;public Rect Bounds,Work;public uint Flags;}
+    [DllImport("user32.dll")] static extern bool GetMonitorInfo(IntPtr h,ref MonitorInfo info);
+    public static IntPtr[] HideTools(IntPtr main) {
+        uint owner;GetWindowThreadProcessId(main,out owner);var hidden=new List<IntPtr>();
+        EnumWindows((h,p)=>{uint pid;GetWindowThreadProcessId(h,out pid);
+            if(pid==owner&&h!=main&&IsWindowVisible(h)&&(GetWindowLong(h,-20)&0x80)!=0){hidden.Add(h);ShowWindowAsync(h,0);}return true;
+        },IntPtr.Zero);return hidden.ToArray();
+    }
+    public static Rect ScreenBounds(IntPtr window) {
+        var info=new MonitorInfo();info.Size=Marshal.SizeOf(info);
+        if(!GetMonitorInfo(MonitorFromWindow(window,2),ref info))throw new Exception("Monitor not found");
+        return info.Bounds;
+    }
+    public static void Fullscreen(IntPtr window) {
+        Restore(window);var bounds=ScreenBounds(window);
+        SetWindowLong(window,-16,GetWindowLong(window,-16)&~0x00CF0000);
+        SetWindowPos(window,IntPtr.Zero,bounds.Left,bounds.Top,bounds.Right-bounds.Left,bounds.Bottom-bounds.Top,0x0034);
+    }
 
     public static IntPtr FindHidden(uint pid) {
         IntPtr found=IntPtr.Zero;
@@ -32,7 +51,7 @@ public static class AppBootNative {
             if(owner!=pid||IsWindowVisible(h)||(GetWindowLong(h,-20)&0x80)!=0)return true;
             var cls=new System.Text.StringBuilder(256);var title=new System.Text.StringBuilder(512);
             GetClassName(h,cls,256);GetWindowText(h,title,512);
-            if(cls.ToString()=="Chrome_WidgetWin_1"&&IsAppTitle(title.ToString())){found=h;return false;}return true;
+            if(cls.ToString()=="Chrome_WidgetWin_1"&&title.Length>0){found=h;return false;}return true;
         },IntPtr.Zero);
         return found;
     }
@@ -44,10 +63,15 @@ public static class AppBootNative {
             var title=new System.Text.StringBuilder(512);GetWindowText(h,title,512);
             if(IsAppTitle(title.ToString())){found=h;return false;}return true;
         },IntPtr.Zero);
-        return found;
+        return found!=IntPtr.Zero?found:Find(pid);
     }
     public static bool Visible(IntPtr h) {int cloaked;return IsWindowVisible(h)&&!IsIconic(h)&&(DwmGetWindowAttribute(h,14,out cloaked,4)!=0||cloaked==0);}
-    public static void Restore(IntPtr h) {ShowWindow(h,IsIconic(h)?9:5);}
+    public static void Restore(IntPtr h) {
+        if(!IsWindowVisible(h)||IsIconic(h)) {
+            ShowWindowAsync(h,9);
+            for(int i=0;i<20&&!Visible(h);i++)System.Threading.Thread.Sleep(50);
+        }
+    }
     public static bool Activate(IntPtr h) {
         Restore(h);SetForegroundWindow(h);
         if(GetForegroundWindow()==h)return true;

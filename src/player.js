@@ -36,11 +36,9 @@
   function stop(reason='skipped',immediate=false){
     const s=session;if(!s||s.phase==='closing')return status();
     s.phase='closing';s.video.pause();
-    // Fail-open immediately on errors. Normal end/skip gets a short visual handoff.
-    if(immediate||matchMedia('(prefers-reduced-motion: reduce)').matches){dispose(s,reason);return status();}
-    s.host.style.pointerEvents='none';
-    s.shell.classList.add('closing');
-    s.timers.push(setTimeout(()=>dispose(s,reason),360));
+    // Remove the overlay in the same frame. A fade exposes the Codex page and
+    // creates the flashing transition the user sees at the handoff.
+    dispose(s,reason);
     return status();
   }
 
@@ -50,17 +48,17 @@
     const duration=Number(options.duration);
     if(!Number.isFinite(duration)||duration<1||duration>60)return {ok:false,error:'duration'};
     const host=document.createElement('div');host.id=ROOT;
+    host.tabIndex=-1;
     Object.assign(host.style,{position:'fixed',inset:'0',zIndex:'2147483500',display:'block',
       pointerEvents:'auto',isolation:'isolate'});
     const shadow=host.attachShadow({mode:'open'});
     shadow.innerHTML=`<style>
       :host{all:initial;color-scheme:dark}
       *{box-sizing:border-box}
-      .shell{position:absolute;inset:0;background:#06060d;opacity:0;transition:opacity 180ms ease;overflow:hidden}
-      .shell.ready{opacity:1}.shell.closing{opacity:0;transition:opacity 340ms ease}
-      video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#06060d;display:block}
-      .tools{position:absolute;right:24px;top:44px;display:flex;gap:8px;opacity:.22;transition:opacity .2s}
-      .tools:hover,.tools:focus-within{opacity:1}
+      .shell{position:absolute;inset:0;background:#06060d;opacity:1;overflow:hidden}
+      .shell.ready{opacity:1}.shell.closing{opacity:1}
+      video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#06060d;display:block}
+      .tools,.hint{display:none!important}
       button{font:12px 'Microsoft YaHei UI',sans-serif;color:#eee8ff;background:rgba(24,17,36,.76);
         border:1px solid rgba(216,195,255,.3);border-radius:6px;padding:8px 12px;cursor:pointer}
       button:focus-visible{outline:2px solid #c5a5f2;outline-offset:3px}
@@ -100,7 +98,7 @@
     video.addEventListener('error',()=>stop('media-error',true),{signal:abort.signal});
     s.timers.push(setTimeout(()=>{if(session===s&&s.phase==='loading')stop('load-timeout',true);},8000));
     document.documentElement.appendChild(host);
-    skip.focus({preventScroll:true});
+    host.focus({preventScroll:true});
     try{
       if(options.base64){
         const text=atob(options.base64),bytes=new Uint8Array(text.length);
