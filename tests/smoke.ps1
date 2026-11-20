@@ -6,6 +6,18 @@ Add-Type -Path (Join-Path $root 'scripts\Native.cs') -ReferencedAssemblies @('Ac
 [AppBootNative]::SetProcessDpiAwarenessContext([IntPtr](-4)) | Out-Null
 . (Join-Path $root 'scripts\apps.ps1')
 $target=Get-AppTarget $App ''
+if($env:APP_BOOT_TEST_CLOSE -eq '1') {
+    $originalWindow=Get-TargetWindow $target
+    if($originalWindow -eq [IntPtr]::Zero){throw 'No original window to close'}
+    [AppBootNative]::PostMessage($originalWindow,0x0010,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
+    Start-Sleep -Seconds 2
+    if(-not (Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($target.Exe)) -ErrorAction SilentlyContinue)){throw 'Close exited all processes'}
+}
+if($env:APP_BOOT_TEST_HIDE -eq '1') {
+    $originalWindow=Get-TargetWindow $target
+    [AppBootNative]::ShowWindowAsync($originalWindow,0) | Out-Null
+    Start-Sleep -Milliseconds 500
+}
 $originalDelay=[Environment]::GetEnvironmentVariable('APP_BOOT_TEST_READY_DELAY_MS','Process')
 try {
     $env:APP_BOOT_TEST_READY_DELAY_MS=if($Delayed){'18000'}else{'0'}
@@ -23,11 +35,11 @@ while([DateTime]::UtcNow -lt $deadline) {
         if($trace -and $trace.splashPid -and $trace.window -and -not $geometry) {
             $window=[AppBootNative]::Find([uint32]$trace.splashPid)
             $appWindow=Get-TargetWindow $target
-            $s=New-Object AppBootNative+Rect;$a=New-Object AppBootNative+Rect
+            $s=New-Object AppBootNative+Rect;$a=New-Object AppBootNative+Rect;$origin=New-Object AppBootNative+Point
             if($window -ne [IntPtr]::Zero -and $appWindow -ne [IntPtr]::Zero -and
-                [AppBootNative]::GetWindowRect($window,[ref]$s) -and [AppBootNative]::GetWindowRect($appWindow,[ref]$a)) {
-                $geometry=([Math]::Abs($s.Left-$a.Left) -le 2 -and [Math]::Abs($s.Top-$a.Top) -le 2 -and
-                    [Math]::Abs($s.Right-$a.Right) -le 2 -and [Math]::Abs($s.Bottom-$a.Bottom) -le 2)
+                [AppBootNative]::GetClientRect($window,[ref]$s) -and [AppBootNative]::ClientToScreen($window,[ref]$origin) -and [AppBootNative]::GetWindowRect($appWindow,[ref]$a)) {
+                $geometry=($origin.X -le $a.Left -and $origin.Y -le $a.Top -and
+                    $origin.X+$s.Right -ge $a.Right -and $origin.Y+$s.Bottom -ge $a.Bottom)
             }
         }
         if($trace -and $trace.phase -eq 'finished'){break}
@@ -43,4 +55,6 @@ if(($ended-$first).TotalSeconds -lt 13.8){throw 'Video was truncated'}
 if($finished -lt $ended -or $finished -lt $ready){throw 'Closed before both conditions'}
 if($Delayed -and $ready -le $ended){throw 'Delayed readiness did not hold the last frame'}
 if(-not $geometry){throw 'Splash geometry did not match target window'}
+$handoffWindow=Get-TargetWindow $target
+if($handoffWindow -eq [IntPtr]::Zero -or -not [AppBootNative]::Visible($handoffWindow)){throw 'Application not visible after video'}
 [pscustomobject]@{App=$App;Delayed=[bool]$Delayed;FullFilm=$true;GeometryMatched=$geometry;ReadySeconds=[Math]::Round(($ready-$first).TotalSeconds,2);FilmSeconds=[Math]::Round(($ended-$first).TotalSeconds,2);Result='PASS'} | ConvertTo-Json -Compress

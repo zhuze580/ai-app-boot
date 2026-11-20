@@ -1,7 +1,7 @@
 # 动画素材
 
-仓库内的 `demo.mp4` 是本项目用代码生成的原创几何演示动画，14.2 秒、640×360、H.264，无音轨，按项目 MIT 许可证提供。生成器为 `scripts/make-demo.py`，可选依赖 Python、Pillow 和 ffmpeg。
+默认 intro.mp4 是用户提供、并明确要求在 GitHub 下载包直接使用的 Codex 开场视频。保留扫描圆环、粒子、人物、原文字及声音，14.2 秒、1024×576、H.264/AAC。输出 SHA-256：`0d6069a477dd55d97bc724db2dbb8749fbc3508bc2cf8e1d4153f1fa86f0471f`。裁切来源见 intro.json。
 
-替换动画：把自己的 H.264/AAC MP4 放在这里，命名为 `intro.mp4`，启动器自动优先使用。支持最长 60 秒、最大 32 MiB 的视频，音量可配置。删除 intro.mp4 后回到演示视频。也可以在 config.local.json 中用 media 指定本目录内的其他文件名。
+替换动画：把自己的 H.264/AAC MP4 放在这里，命名为 intro.mp4 即可。支持最长 60 秒、最大 32 MiB 的视频，音量可配置。也可以在 config.local.json 中用 media 指定本目录内的其他文件名。
 
-intro.mp4 被 Git 忽略，不会随代码提交。用户提供的原片、人物和音乐不包含在项目 MIT 授权中。
+intro.mp4 已纳入仓库及下载包。原片、人物和音乐权利属于各自权利人，不包含在项目 MIT 授权中，不授予额外商业使用或再许可权利。

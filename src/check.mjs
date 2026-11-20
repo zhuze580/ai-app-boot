@@ -10,7 +10,7 @@ const app=process.argv[2]||'Codex';
 const config=validateConfig({...local,...local.apps?.[app],app});
 let file;
 if(config.media)file=mediaPath(root,config.media);
-else {file=mediaPath(root,'intro.mp4');try {await fs.access(file);}catch{file=mediaPath(root,'demo.mp4');}}
+else file=mediaPath(root,'intro.mp4');
 const media=await fs.readFile(file);
 if(media.length<1||media.length>32*1024*1024)throw new Error('Video must be at most 32 MiB');
 console.log(JSON.stringify({ok:true,app,node:process.versions.node,media:path.basename(file),bytes:media.length}));

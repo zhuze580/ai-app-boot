@@ -10,7 +10,7 @@ import {CDP} from '../src/cdp.mjs';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const profile=await fs.mkdtemp(path.join(os.tmpdir(),'codex-startup-browser-'));
-const video=await fs.readFile(path.join(root,'assets/demo.mp4'));
+const video=await fs.readFile(path.join(root,'assets/intro.mp4'));
 const player=await fs.readFile(path.join(root,'src/player.js'),'utf8');
 const server=http.createServer((req,res)=>{
   if(req.url==='/intro.mp4'){

@@ -62,7 +62,7 @@ function Get-TargetWindow($Target) {
     foreach ($process in @(Get-Process -Name $name -ErrorAction SilentlyContinue)) {
         try {
             if ($process.Path -ine $Target.Exe) { continue }
-            $handle = [AppBootNative]::Find([uint32]$process.Id)
+            $handle = [AppBootNative]::FindMain([uint32]$process.Id)
             if ($handle -ne [IntPtr]::Zero) { return $handle }
         } catch { }
     }
@@ -72,8 +72,17 @@ function Get-TargetWindow($Target) {
 function Start-TargetApp($Target) {
     $window = Get-TargetWindow $Target
     if ($window -ne [IntPtr]::Zero) {
-        if ([AppBootNative]::IsIconic($window)) { [AppBootNative]::ShowWindowAsync($window,4) | Out-Null }
+        [AppBootNative]::Restore($window)
         return
+    }
+    # Electron often hides its main window on close while its process stays alive.
+    foreach ($running in @(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Target.Exe)) -ErrorAction SilentlyContinue)) {
+        if ($running.Path -ine $Target.Exe) {continue}
+        $hidden=[AppBootNative]::FindHidden([uint32]$running.Id)
+        if ($hidden -ne [IntPtr]::Zero) {
+            [AppBootNative]::Restore($hidden)
+            if ([AppBootNative]::Visible($hidden)) {return}
+        }
     }
     $dreamRoot = Join-Path $env:LOCALAPPDATA 'CodexDreamSkin'
     $dreamStart = Join-Path $dreamRoot 'engine\scripts\start-dream-skin.ps1'
@@ -97,7 +106,8 @@ function Start-TargetApp($Target) {
         }
     }
     if ($Target.Kind -eq 'store') {
-        Start-Process -FilePath explorer.exe -ArgumentList ('shell:AppsFolder\'+$Target.Aumid) | Out-Null
+        $identity=$Target.Aumid -split '!',2
+        Invoke-CommandInDesktopPackage -PackageFamilyName $identity[0] -AppId $identity[1] -Command $Target.Exe -Args '--force-renderer-accessibility' -PreventBreakaway -ErrorAction Stop | Out-Null
     } else {
         Start-Process -FilePath $Target.Exe -ArgumentList '--force-renderer-accessibility' | Out-Null
     }

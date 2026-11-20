@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "filename": "intro.mp4",
+  "mime": "video/mp4",
+  "duration": 14.2,
+  "width": 1024,
+  "height": 576,
+  "fps": 30,
+  "audio": true,
+  "size": 5541403,
+  "sha256": "0d6069a477dd55d97bc724db2dbb8749fbc3508bc2cf8e1d4153f1fa86f0471f",
+  "source": {
+    "filename": "mmexport1795018480220.mp4",
+    "sha256": "0aaad6ce6aaefd9f48cdae10b144023551ca6c24c3b5b1f726909f214832b28b",
+    "in": 2.5,
+    "out": 16.7,
+    "duration": 19.033333
+  },
+  "note": "User-supplied reference. User explicitly requested distributing this startup clip in this GitHub project. Media rights are separate from the source code license."
+}

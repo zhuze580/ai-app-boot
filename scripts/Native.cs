@@ -8,9 +8,70 @@ public static class AppBootNative {
     [StructLayout(LayoutKind.Sequential)] public struct Rect {public int Left,Top,Right,Bottom;}
     delegate bool Visit(IntPtr h,IntPtr p);
     [DllImport("user32.dll")] static extern bool EnumWindows(Visit callback,IntPtr param);
+    [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent,Visit callback,IntPtr param);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h,out uint pid);
     [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
     [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);
+    [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h,out Rect r);
+    [StructLayout(LayoutKind.Sequential)] public struct Point {public int X,Y;}
+    [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr h,ref Point p);
+    [DllImport("user32.dll")] static extern int GetClassName(IntPtr h,System.Text.StringBuilder text,int max);
+    [DllImport("user32.dll")] static extern int GetWindowText(IntPtr h,System.Text.StringBuilder text,int max);
+    [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h,uint msg,IntPtr w,IntPtr l);
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h,int command);
+    [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr h);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern bool AttachThreadInput(uint from,uint to,bool attach);
+    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+    [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h,int attr,ref int value,int size);
+    [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h,int attr,out int value,int size);
+
+    public static IntPtr FindHidden(uint pid) {
+        IntPtr found=IntPtr.Zero;
+        EnumWindows((h,p)=>{uint owner;GetWindowThreadProcessId(h,out owner);
+            if(owner!=pid||IsWindowVisible(h)||(GetWindowLong(h,-20)&0x80)!=0)return true;
+            var cls=new System.Text.StringBuilder(256);var title=new System.Text.StringBuilder(512);
+            GetClassName(h,cls,256);GetWindowText(h,title,512);
+            if(cls.ToString()=="Chrome_WidgetWin_1"&&IsAppTitle(title.ToString())){found=h;return false;}return true;
+        },IntPtr.Zero);
+        return found;
+    }
+    static bool IsAppTitle(string title) {return title=="ChatGPT"||title=="Codex"||title=="WorkBuddy"||title=="WorkBuddy AI";}
+    public static IntPtr FindMain(uint pid) {
+        IntPtr found=IntPtr.Zero;
+        EnumWindows((h,p)=>{uint owner;GetWindowThreadProcessId(h,out owner);
+            if(owner!=pid||!IsWindowVisible(h)||(GetWindowLong(h,-20)&0x80)!=0)return true;
+            var title=new System.Text.StringBuilder(512);GetWindowText(h,title,512);
+            if(IsAppTitle(title.ToString())){found=h;return false;}return true;
+        },IntPtr.Zero);
+        return found;
+    }
+    public static bool Visible(IntPtr h) {int cloaked;return IsWindowVisible(h)&&!IsIconic(h)&&(DwmGetWindowAttribute(h,14,out cloaked,4)!=0||cloaked==0);}
+    public static void Restore(IntPtr h) {ShowWindow(h,IsIconic(h)?9:5);}
+    public static bool Activate(IntPtr h) {
+        Restore(h);SetForegroundWindow(h);
+        if(GetForegroundWindow()==h)return true;
+        uint owner;uint other=GetWindowThreadProcessId(GetForegroundWindow(),out owner),current=GetCurrentThreadId();bool attached=false;
+        try {if(other!=0&&other!=current)attached=AttachThreadInput(current,other,true);BringWindowToTop(h);SetForegroundWindow(h);}
+        finally {if(attached)AttachThreadInput(current,other,false);}
+        return Visible(h)&&GetForegroundWindow()==h;
+    }
+    public static bool Cover(IntPtr splash,Rect target) {
+        // WS_CAPTION | WS_THICKFRAME | WS_BORDER | WS_DLGFRAME. Also remove extended client/window edges.
+        SetWindowLong(splash,-16,GetWindowLong(splash,-16)&~0x00CF0000);
+        SetWindowLong(splash,-20,GetWindowLong(splash,-20)&~0x00020301);
+        int square=1;DwmSetWindowAttribute(splash,33,ref square,4);
+        SetWindowPos(splash,new IntPtr(-1),target.Left,target.Top,target.Right-target.Left,target.Bottom-target.Top,0x0030);
+        Rect client;Point origin=new Point();
+        if(!GetClientRect(splash,out client)||!ClientToScreen(splash,ref origin))return false;
+        int left=origin.X-target.Left,top=origin.Y-target.Top;
+        // Correct any residual Chromium non-client inset using actual physical client pixels.
+        int width=target.Right-target.Left+left+(target.Right-(origin.X+client.Right));
+        int height=target.Bottom-target.Top+top+(target.Bottom-(origin.Y+client.Bottom));
+        if(left!=0||top!=0||client.Right<target.Right-target.Left||client.Bottom<target.Bottom-target.Top)
+            SetWindowPos(splash,new IntPtr(-1),target.Left-left,target.Top-top,width,height,0x0030);
+        return true;
+    }
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h,out Rect r);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h,IntPtr after,int x,int y,int w,int height,uint flags);
     [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr h,int index);
@@ -40,6 +101,9 @@ public static class AppBootNative {
         Guid id=typeof(IAccessible).GUID;IAccessible root;
         if(AccessibleObjectFromWindow(window,0xFFFFFFFC,ref id,out root)!=0||root==null)return false;
         var queue=new Queue<IAccessible>();queue.Enqueue(root);
+        EnumChildWindows(window,(h,p)=>{var cls=new System.Text.StringBuilder(256);GetClassName(h,cls,256);
+            if(cls.ToString()=="Chrome_RenderWidgetHostHWND"){IAccessible page;Guid pageId=typeof(IAccessible).GUID;if(AccessibleObjectFromWindow(h,0xFFFFFFFC,ref pageId,out page)==0&&page!=null)queue.Enqueue(page);}return true;
+        },IntPtr.Zero);
         int visited=0;bool editor=false,navigation=false;
         InspectedNodes=0;TextNodes=0;LastTextState=0;
         while(queue.Count>0&&visited<1800) {
@@ -51,6 +115,7 @@ public static class AppBootNative {
                 for(int i=0;i<obtained;i++) {
                     visited++;
                     var node=children[i] as IAccessible;
+                    if(node==null&&children[i]!=null){try{node=parent.get_accChild(children[i]) as IAccessible;}catch{}}
                     var owner=node??parent;object child=node!=null?(object)0:children[i];
                     if(child==null)continue;
                     try {

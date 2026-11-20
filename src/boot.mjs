@@ -6,6 +6,7 @@ import {randomUUID,randomBytes} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {CDP} from './cdp.mjs';
+import {codexReady} from './codex-ready.mjs';
 import {validateConfig,shouldFinish,parseRange,mediaPath} from './core.mjs';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -59,7 +60,8 @@ async function watchApp() {
       if(status.failed)trace.launchFailed=true;
       if(status.window)trace.window={x:status.x,y:status.y,width:status.width,height:status.height};
       const testDelay=Math.min(30000,Math.max(0,Number(process.env.APP_BOOT_TEST_READY_DELAY_MS)||0));
-      if(status.ready&&!appReady&&Date.now()-Date.parse(trace.appLaunchRequestedAt)>=testDelay) {
+      const verifiedReady=status.ready||(!appReady&&app==='Codex'&&status.window&&status.codexConnection&&await codexReady(status.codexConnection));
+      if(verifiedReady&&!appReady&&Date.now()-Date.parse(trace.appLaunchRequestedAt)>=testDelay) {
         appReady=true;trace.appReadyAt=new Date().toISOString();await save();finishWhenReady();
       }
     }catch{}
@@ -70,10 +72,7 @@ try {
   if(configurationError)throw new Error('Invalid config.local.json; run Check to inspect configuration');
   let video;
   if(config.media)video=mediaPath(root,config.media);
-  else {
-    video=mediaPath(root,'intro.mp4');
-    try {await fs.access(video);} catch {video=mediaPath(root,'demo.mp4');}
-  }
+  else video=mediaPath(root,'intro.mp4');
   const media=await fs.readFile(video);
   if(media.length<1||media.length>32*1024*1024)throw new Error('Media must be 1 byte to 32 MiB');
   const player=await fs.readFile(path.join(root,'src/player.js'));

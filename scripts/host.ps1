@@ -21,6 +21,16 @@ try {
     [AppBootNative]::SetProcessDpiAwarenessContext([IntPtr](-4)) | Out-Null
     Start-TargetApp $target
     if ($LaunchOnly) { exit 0 }
+    $codexConnection=$null
+    if($App -eq 'Codex') {
+        try {
+            $state=Get-Content (Join-Path $env:LOCALAPPDATA 'CodexDreamSkin\state.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+            $owners=@(Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort $state.port -State Listen -ErrorAction Stop | Select-Object -ExpandProperty OwningProcess -Unique)
+            if($owners.Count -eq 1 -and (Get-Process -Id $owners[0]).Path -ieq $target.Exe -and $state.codexExe -ieq $target.Exe) {
+                $codexConnection=@{port=[int]$state.port;browserId=$state.browserId}
+            }
+        }catch{}
+    }
     $chrome=Get-Process -Id $ChromePid -ErrorAction Stop
     $command=(Get-CimInstance Win32_Process -Filter ('ProcessId='+$ChromePid)).CommandLine
     if ($chrome.ProcessName -ne 'chrome' -or -not $ProfilePath -or -not $command.Contains($ProfilePath)) { throw 'Unverified splash process.' }
@@ -31,17 +41,16 @@ try {
         $window=Get-TargetWindow $target
         $status=@{app=$App;ready=$false;failed=$false}
         if ($window -ne [IntPtr]::Zero) {
-            if ([AppBootNative]::IsIconic($window)) { [AppBootNative]::ShowWindowAsync($window,4) | Out-Null }
+            if ([AppBootNative]::IsIconic($window)) { [AppBootNative]::Restore($window) }
             $rect=New-Object AppBootNative+Rect
             if ([AppBootNative]::GetWindowRect($window,[ref]$rect) -and $rect.Right-$rect.Left -gt 200) {
                 $status.window=$window.ToInt64();$status.x=$rect.Left;$status.y=$rect.Top
                 $status.width=$rect.Right-$rect.Left;$status.height=$rect.Bottom-$rect.Top
+                if($codexConnection){$status.codexConnection=$codexConnection}
                 if ($splash -eq [IntPtr]::Zero) { $splash=[AppBootNative]::Find([uint32]$ChromePid) }
                 $key="$($status.x),$($status.y),$($status.width),$($status.height)"
-                if ($splash -ne [IntPtr]::Zero -and $key -ne $lastRect) {
-                    $style=[AppBootNative]::GetWindowLong($splash,-16)
-                    [AppBootNative]::SetWindowLong($splash,-16,($style -band (-bnot 0x00C80000))) | Out-Null
-                    [AppBootNative]::SetWindowPos($splash,[IntPtr](-1),$status.x,$status.y,$status.width,$status.height,0x0030) | Out-Null
+                if ($splash -ne [IntPtr]::Zero) {
+                    [AppBootNative]::Cover($splash,$rect) | Out-Null
                     $lastRect=$key
                 }
                 if (-not $ready) {
@@ -55,7 +64,11 @@ try {
         Start-Sleep -Milliseconds 250
     }
     $window=Get-TargetWindow $target
-    if ($window -ne [IntPtr]::Zero) { [AppBootNative]::SetForegroundWindow($window) | Out-Null }
+    if ($window -eq [IntPtr]::Zero) {Start-TargetApp $target;$window=Get-TargetWindow $target}
+    if ($window -ne [IntPtr]::Zero) {
+        $activated=[AppBootNative]::Activate($window)
+        Write-Status @{app=$App;ready=$ready;failed=$false;handoffVisible=[AppBootNative]::Visible($window);handoffFocused=$activated}
+    }
 } catch {
     Write-Status @{app=$App;ready=$false;failed=$true;error=$_.Exception.Message}
     Write-Error $_.Exception.Message
