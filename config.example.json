@@ -1,0 +1,9 @@
+{
+  "volume": 0.65,
+  "muted": false,
+  "readyMode": "accessible",
+  "apps": {
+    "Codex": {},
+    "WorkBuddy": {}
+  }
+}

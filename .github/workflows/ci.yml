@@ -1,0 +1,23 @@
+name: Windows checks
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm test
+      - name: Parse PowerShell and compile native helper
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
+            $tokens=$null; $issues=$null
+            [void][Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$tokens,[ref]$issues)
+            if($issues.Count){throw ($issues | Out-String)}
+          }
+          Add-Type -AssemblyName Accessibility
+          Add-Type -Path scripts/Native.cs -ReferencedAssemblies Accessibility,System,System.Core
+      - run: npm run test:browser

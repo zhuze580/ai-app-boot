@@ -1,0 +1,10 @@
+config.local.json
+assets/intro.mp4
+assets/local-*
+node_modules/
+*.log
+*.zip
+.env
+.env.*
+__pycache__/
+.venv/

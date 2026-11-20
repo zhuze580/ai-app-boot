@@ -1,0 +1,18 @@
+{
+  "name": "ai-app-boot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Video startup splash for Codex and Tencent WorkBuddy on Windows",
+  "license": "MIT",
+  "engines": {"node": ">=22"},
+  "scripts": {
+    "test": "node --test tests/core.test.mjs",
+    "test:browser": "node tests/browser.mjs",
+    "test:fail-open": "node tests/fail-open.mjs",
+    "start": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File launch.ps1 -App Codex",
+    "start:workbuddy": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File launch.ps1 -App WorkBuddy",
+    "preview": "node src/boot.mjs Codex --preview",
+    "check": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File launch.ps1 -Action Check"
+  }
+}
