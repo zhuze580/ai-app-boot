@@ -38,6 +38,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 let browser,cdp,server,host,hostDone=Promise.resolve(),started=false,completed=false,filmEnded=false,appReady=preview;
 let heartbeatTimer,lastHeartbeat=Date.now();
 let themedBrowser=null;
+let lastMainWindow=null;
 let finish;
 const complete=new Promise(resolve=>{finish=reason=>{if(!completed){completed=true;resolve(reason);}};});
 const finishWhenReady=()=>{if(shouldFinish({appReady,filmEnded}))finish('ready-after-film');};
@@ -62,6 +63,8 @@ async function watchApp() {
       if(status.failed){trace.launchFailed=true;trace.failureCode=/operation.*running|operation.*finish/i.test(status.error||'')?'theme-busy':'app-start-failed';}
       if(status.warning)trace.warning=status.warning;
       if(status.window)trace.window={x:status.x,y:status.y,width:status.width,height:status.height};
+      if(!status.window){appReady=false;lastMainWindow=null;await delay(150);continue;}
+      if(status.window!==lastMainWindow){appReady=false;lastMainWindow=status.window;}
       const testDelay=Math.min(30000,Math.max(0,Number(process.env.APP_BOOT_TEST_READY_DELAY_MS)||0));
       let themeReady=!status.themeRequired;
       if(status.themeRequired&&status.codexConnection) {
@@ -183,7 +186,7 @@ try {
   await fs.rm(controlFile,{force:true});
   // Give the helper time to activate the verified app window. Never terminate the target app.
   let hostTimer;
-  try {await Promise.race([hostDone,new Promise(resolve=>{hostTimer=setTimeout(resolve,5000);})]);}
+  try {await Promise.race([hostDone,new Promise(resolve=>{hostTimer=setTimeout(resolve,12000);})]);}
   finally {clearTimeout(hostTimer);}
   if(host&&host.exitCode===null)host.kill();
   try {if(path.dirname(profile)===sessionRoot)await fs.rm(profile,{recursive:true,force:true});}catch{}

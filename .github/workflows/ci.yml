@@ -27,4 +27,5 @@ jobs:
           if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
           & ./tests/theme-recovery.ps1
           & ./tests/theme-session-start.ps1
+          & ./tests/resume-window.ps1
       - run: npm run test:browser

@@ -6,6 +6,7 @@ Add-Type -Path (Join-Path $root 'scripts\Native.cs') -ReferencedAssemblies @('Ac
 [AppBootNative]::SetProcessDpiAwarenessContext([IntPtr](-4)) | Out-Null
 . (Join-Path $root 'scripts\apps.ps1')
 $target=Get-AppTarget $App ''
+$initialProcessIds=@(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($target.Exe)) -ErrorAction SilentlyContinue|Where-Object {$_.Path -ieq $target.Exe}|Select-Object -ExpandProperty Id)
 if($env:APP_BOOT_TEST_CLOSE -eq '1') {
     $originalWindow=Get-TargetWindow $target
     if($originalWindow -eq [IntPtr]::Zero){throw 'No original window to close'}
@@ -27,7 +28,9 @@ try {
 } finally { [Environment]::SetEnvironmentVariable('APP_BOOT_TEST_READY_DELAY_MS',$originalDelay,'Process') }
 $log=Join-Path $env:LOCALAPPDATA ('AIAppBoot\last-'+$App.ToLower()+'.json')
 $deadline=[DateTime]::UtcNow.AddSeconds(50)
-$geometry=$false;$trace=$null
+$geometry=$false;$trace=$null;$closedDuringFilm=$false
+$closeAt=5
+if($env:APP_BOOT_TEST_CLOSE_AT){$closeAt=[double]$env:APP_BOOT_TEST_CLOSE_AT}
 while([DateTime]::UtcNow -lt $deadline) {
     try {
         $trace=Get-Content -LiteralPath $log -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -43,6 +46,10 @@ while([DateTime]::UtcNow -lt $deadline) {
             }
         }
         if($trace -and $trace.phase -eq 'finished'){break}
+        if($trace -and $trace.firstFrameAt -and $env:APP_BOOT_TEST_CLOSE_DURING -eq '1' -and -not $closedDuringFilm -and ([DateTime]::UtcNow-[DateTime]::Parse($trace.firstFrameAt).ToUniversalTime()).TotalSeconds -ge $closeAt){
+            $activeWindow=Get-TargetWindow $target
+            if($activeWindow -ne [IntPtr]::Zero){[AppBootNative]::PostMessage($activeWindow,0x0010,[IntPtr]::Zero,[IntPtr]::Zero)|Out-Null;$closedDuringFilm=$true}
+        }
     } catch { }
     Start-Sleep -Milliseconds 150
 }
@@ -59,6 +66,11 @@ if($Delayed -and $ready -le $ended){throw 'Delayed readiness did not hold the la
 if(-not $geometry){throw 'Splash geometry did not match target window'}
 $handoffWindow=Get-TargetWindow $target
 if($handoffWindow -eq [IntPtr]::Zero -or -not [AppBootNative]::Visible($handoffWindow)){throw 'Application not visible after video'}
+if([AppBootNative]::GetForegroundWindow() -ne $handoffWindow){throw 'Application did not receive foreground after video'}
+if($env:APP_BOOT_TEST_CLOSE -eq '1' -or $env:APP_BOOT_TEST_CLOSE_DURING -eq '1') {
+    $remaining=@(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($target.Exe)) -ErrorAction SilentlyContinue|Where-Object {$_.Path -ieq $target.Exe -and $_.Id -in $initialProcessIds})
+    if($remaining.Count -eq 0){throw 'Background session was restarted instead of restored'}
+}
 $screen=[AppBootNative]::ScreenBounds($handoffWindow);$bounds=New-Object AppBootNative+Rect
 [AppBootNative]::GetWindowRect($handoffWindow,[ref]$bounds) | Out-Null
 if($bounds.Left -ne $screen.Left -or $bounds.Top -ne $screen.Top -or $bounds.Right -ne $screen.Right -or $bounds.Bottom -ne $screen.Bottom){throw 'Application did not stay fullscreen after playback'}

@@ -46,11 +46,23 @@ try {
     }
     $consecutive=0;$ready=$false;$lastRect='';$mainWindow=[IntPtr]::Zero;$screenKey=''
     $themeRequired=$App -eq 'Codex' -and (Test-Path (Join-Path $env:LOCALAPPDATA 'CodexDreamSkin\engine\scripts\injector.mjs'))
-    $nextConnectionCheck=[DateTime]::MinValue;$themeWatcherAlive=$false
+    $nextConnectionCheck=[DateTime]::MinValue;$themeWatcherAlive=$false;$nextResume=[DateTime]::UtcNow.AddSeconds(2)
     while (Test-Path -LiteralPath $ControlFile) {
         $chrome.Refresh()
         if ($chrome.HasExited) { break }
         $window=Get-TargetWindow $target
+        if($window -eq [IntPtr]::Zero){
+            $ready=$false;$consecutive=0
+            Write-Status @{app=$App;ready=$false;failed=$false;recoveringWindow=$true}
+        }
+        if($window -eq [IntPtr]::Zero -and [DateTime]::UtcNow -ge $nextResume) {
+            $nextResume=[DateTime]::UtcNow.AddSeconds(10)
+            try {
+                . (Join-Path $PSScriptRoot 'resume-window.ps1')
+                $window=Resume-AppBootWindow $target
+            }catch{}
+        }
+        if($window -eq [IntPtr]::Zero){$ready=$false;$consecutive=0}
         $status=@{app=$App;ready=$false;failed=$false}
         if($startupWarning){$status.warning=$startupWarning}
         if($themeRequired){
@@ -82,6 +94,7 @@ try {
             $screen=[AppBootNative]::ScreenBounds($window)
             $nextScreenKey="$($screen.Left),$($screen.Top),$($screen.Right),$($screen.Bottom)"
             if ($window -ne $mainWindow -or $nextScreenKey -ne $screenKey) {
+                if($window -ne $mainWindow){$ready=$false;$consecutive=0}
                 [AppBootNative]::Fullscreen($window)
                 $hiddenTools=@([AppBootNative]::HideTools($window))
                 Start-Sleep -Milliseconds 120
@@ -113,9 +126,14 @@ try {
         Start-Sleep -Milliseconds 250
     }
     $window=Get-TargetWindow $target
-    if ($window -eq [IntPtr]::Zero) {Start-TargetApp $target;$window=Get-TargetWindow $target}
+    if ($window -eq [IntPtr]::Zero) {
+        . (Join-Path $PSScriptRoot 'resume-window.ps1')
+        $window=Resume-AppBootWindow $target
+    }
     if ($window -ne [IntPtr]::Zero) {
-        $activated=[AppBootNative]::Activate($window)
+        [AppBootNative]::Fullscreen($window)
+        $activationDeadline=[DateTime]::UtcNow.AddSeconds(3)
+        do {$activated=[AppBootNative]::Activate($window);if($activated){break};Start-Sleep -Milliseconds 100}while([DateTime]::UtcNow -lt $activationDeadline)
         Write-Status @{app=$App;ready=$ready;failed=$false;handoffVisible=[AppBootNative]::Visible($window);handoffFocused=$activated}
     }
 } catch {

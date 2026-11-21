@@ -109,6 +109,12 @@ function Start-TargetApp($Target) {
             if ([AppBootNative]::Visible($hidden)) {return}
         }
     }
+    $background=@(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Target.Exe)) -ErrorAction SilentlyContinue|Where-Object {$_.Path -ieq $Target.Exe})
+    if($background.Count -gt 0){
+        . (Join-Path $PSScriptRoot 'resume-window.ps1')
+        Resume-AppBootWindow $Target | Out-Null
+        return
+    }
     $dreamRoot = Join-Path $env:LOCALAPPDATA 'CodexDreamSkin'
     $dreamStart = Join-Path $dreamRoot 'engine\scripts\start-dream-skin.ps1'
     if ($Target.App -eq 'Codex' -and (Test-Path -LiteralPath $dreamStart)) {
