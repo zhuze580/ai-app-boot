@@ -2,13 +2,8 @@
     $window=Get-TargetWindow $Target
     if($window -ne [IntPtr]::Zero){[AppBootNative]::Restore($window);return $window}
     $name=[IO.Path]::GetFileNameWithoutExtension($Target.Exe)
-    foreach($running in @(Get-Process -Name $name -ErrorAction SilentlyContinue)) {
-        if($running.Path -ine $Target.Exe){continue}
-        $hidden=[AppBootNative]::FindHidden([uint32]$running.Id)
-        if($hidden -ne [IntPtr]::Zero){[AppBootNative]::Restore($hidden)}
-    }
-    $window=Get-TargetWindow $Target
-    if($window -ne [IntPtr]::Zero){return $window}
+    # Do not expose a hidden Chromium HWND with ShowWindow alone: doing so can
+    # show its last frame while the app still considers the renderer hidden.
     $themeRoot=Join-Path $env:LOCALAPPDATA 'CodexDreamSkin'
     $state=$null
     if($Target.App -eq 'Codex') {

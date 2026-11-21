@@ -100,15 +100,7 @@ function Start-TargetApp($Target) {
         [AppBootNative]::Restore($window)
         return
     }
-    # Electron often hides its main window on close while its process stays alive.
-    foreach ($running in @(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Target.Exe)) -ErrorAction SilentlyContinue)) {
-        if ($running.Path -ine $Target.Exe) {continue}
-        $hidden=[AppBootNative]::FindHidden([uint32]$running.Id)
-        if ($hidden -ne [IntPtr]::Zero) {
-            [AppBootNative]::Restore($hidden)
-            if ([AppBootNative]::Visible($hidden)) {return}
-        }
-    }
+    # Use the app's single-instance handler so its renderer resumes as well.
     $background=@(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Target.Exe)) -ErrorAction SilentlyContinue|Where-Object {$_.Path -ieq $Target.Exe})
     if($background.Count -gt 0){
         . (Join-Path $PSScriptRoot 'resume-window.ps1')

@@ -39,6 +39,7 @@ let browser,cdp,server,host,hostDone=Promise.resolve(),started=false,completed=f
 let heartbeatTimer,lastHeartbeat=Date.now();
 let themedBrowser=null;
 let lastMainWindow=null;
+let lastCodexConnection=null;
 let finish;
 const complete=new Promise(resolve=>{finish=reason=>{if(!completed){completed=true;resolve(reason);}};});
 const finishWhenReady=()=>{if(shouldFinish({appReady,filmEnded}))finish('ready-after-film');};
@@ -62,6 +63,7 @@ async function watchApp() {
       const status=JSON.parse(await fs.readFile(statusFile,'utf8'));
       if(status.failed){trace.launchFailed=true;trace.failureCode=/operation.*running|operation.*finish/i.test(status.error||'')?'theme-busy':'app-start-failed';}
       if(status.warning)trace.warning=status.warning;
+      if(status.codexConnection)lastCodexConnection=status.codexConnection;
       if(status.window)trace.window={x:status.x,y:status.y,width:status.width,height:status.height};
       if(!status.window){appReady=false;lastMainWindow=null;await delay(150);continue;}
       if(status.window!==lastMainWindow){appReady=false;lastMainWindow=status.window;}
@@ -189,6 +191,7 @@ try {
   try {await Promise.race([hostDone,new Promise(resolve=>{hostTimer=setTimeout(resolve,12000);})]);}
   finally {clearTimeout(hostTimer);}
   if(host&&host.exitCode===null)host.kill();
+  if(app==='Codex'&&lastCodexConnection)trace.interactiveHandoff=await codexReady(lastCodexConnection,{activate:true});
   try {if(path.dirname(profile)===sessionRoot)await fs.rm(profile,{recursive:true,force:true});}catch{}
   trace.finishedAt=new Date().toISOString();trace.phase='finished';await save();
 }

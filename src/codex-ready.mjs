@@ -1,6 +1,6 @@
 import {CDP} from './cdp.mjs';
 // Optional existing DreamSkin connection only. Native host verifies the listener owner/executable.
-export async function codexReady(state) {
+export async function codexReady(state,{activate=false}={}) {
   if(!Number.isInteger(state?.port)||state.port<1024||state.port>65535||!/^[a-f0-9-]{36}$/i.test(state.browserId||''))return false;
   let cdp;
   try {
@@ -13,11 +13,12 @@ export async function codexReady(state) {
     const endpoint=new URL(pages[0].webSocketDebuggerUrl);
     if(endpoint.protocol!=='ws:'||endpoint.hostname!=='127.0.0.1'||Number(endpoint.port)!==state.port||!endpoint.pathname.startsWith('/devtools/page/')||endpoint.username||endpoint.password||endpoint.search||endpoint.hash)return false;
     cdp=await CDP.open(endpoint.href);
+    if(activate)await cdp.call('Page.bringToFront');
     return await cdp.evaluate(`(()=>{
       const visible=e=>e.isConnected&&e.getClientRects().length>0&&getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none';
       const editor=[...document.querySelectorAll('[contenteditable=true],textarea')].some(e=>visible(e)&&!e.disabled&&!e.readOnly&&e.getAttribute('aria-disabled')!=='true');
       const navigation=[...document.querySelectorAll('button,a,[role=button]')].some(e=>visible(e)&&!e.disabled&&/^(New chat|Search|新对话|新建任务|搜索)/i.test(e.getAttribute('aria-label')||e.getAttribute('title')||''));
-      return location.origin==='app://-'&&!!document.querySelector('main')&&editor&&navigation;
+      return location.origin==='app://-'&&!!document.querySelector('main')&&editor&&navigation${activate?'&&document.hasFocus()&&!document.hidden':''};
     })()`,1800)===true;
   }catch{return false;}finally{cdp?.close();}
 }

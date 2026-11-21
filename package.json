@@ -1,6 +1,6 @@
 {
   "name": "ai-app-boot",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "private": true,
   "type": "module",
   "description": "Video startup splash for Codex and Tencent WorkBuddy on Windows",
