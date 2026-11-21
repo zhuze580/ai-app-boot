@@ -87,6 +87,8 @@ function Start-TargetApp($Target) {
     $dreamRoot = Join-Path $env:LOCALAPPDATA 'CodexDreamSkin'
     $dreamStart = Join-Path $dreamRoot 'engine\scripts\start-dream-skin.ps1'
     if ($Target.App -eq 'Codex' -and (Test-Path -LiteralPath $dreamStart)) {
+        $existing=@(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Target.Exe)) -ErrorAction SilentlyContinue|Where-Object {$_.Path -ieq $Target.Exe})
+        if($existing.Count -eq 0){& $dreamStart | Out-Null;return}
         $state = $null
         try { $state=Get-Content (Join-Path $dreamRoot 'state.json') -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
         if ($state -and $state.codexExe -ieq $Target.Exe) {

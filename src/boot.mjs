@@ -7,6 +7,7 @@ import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {CDP} from './cdp.mjs';
 import {codexReady} from './codex-ready.mjs';
+import {restoreTheme} from './theme-session.mjs';
 import {validateConfig,shouldFinish,parseRange,mediaPath} from './core.mjs';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -36,6 +37,7 @@ const save=()=>{const snapshot=JSON.stringify(trace,null,2);saves=saves.then(()=
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 let browser,cdp,server,host,hostDone=Promise.resolve(),started=false,completed=false,filmEnded=false,appReady=preview;
 let heartbeatTimer,lastHeartbeat=Date.now();
+let themedBrowser=null;
 let finish;
 const complete=new Promise(resolve=>{finish=reason=>{if(!completed){completed=true;resolve(reason);}};});
 const finishWhenReady=()=>{if(shouldFinish({appReady,filmEnded}))finish('ready-after-film');};
@@ -60,8 +62,15 @@ async function watchApp() {
       if(status.failed)trace.launchFailed=true;
       if(status.window)trace.window={x:status.x,y:status.y,width:status.width,height:status.height};
       const testDelay=Math.min(30000,Math.max(0,Number(process.env.APP_BOOT_TEST_READY_DELAY_MS)||0));
+      let themeReady=!status.themeRequired;
+      if(status.themeRequired&&status.codexConnection) {
+        if(themedBrowser!==status.codexConnection.browserId&&await restoreTheme(status.codexConnection,status.themeWatcherAlive)) {
+          themedBrowser=status.codexConnection.browserId;trace.themeRestoredAt=new Date().toISOString();await save();
+        }
+        themeReady=themedBrowser===status.codexConnection.browserId;
+      }
       const verifiedReady=status.ready||(!appReady&&app==='Codex'&&status.window&&status.codexConnection&&await codexReady(status.codexConnection));
-      if(verifiedReady&&!appReady&&Date.now()-Date.parse(trace.appLaunchRequestedAt)>=testDelay) {
+      if(verifiedReady&&themeReady&&!appReady&&Date.now()-Date.parse(trace.appLaunchRequestedAt)>=testDelay) {
         appReady=true;trace.appReadyAt=new Date().toISOString();await save();finishWhenReady();
       }
     }catch{}

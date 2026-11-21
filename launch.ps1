@@ -19,7 +19,7 @@ try {
     if ($LASTEXITCODE -ne 0 -or [int]$major -lt 22) { throw 'Node.js 22 or newer is required.' }
     if ($Action -eq 'Test') {
         Push-Location $root
-        try { & $node --test tests/core.test.mjs tests/media.test.mjs; exit $LASTEXITCODE } finally { Pop-Location }
+        try { & $node --test tests/core.test.mjs tests/media.test.mjs tests/theme.test.mjs; exit $LASTEXITCODE } finally { Pop-Location }
     }
     $localPath=Join-Path $root 'config.local.json'
     if (-not $AppPath -and (Test-Path -LiteralPath $localPath)) {
