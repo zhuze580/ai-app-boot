@@ -59,7 +59,8 @@ async function watchApp() {
   while(!completed) {
     try {
       const status=JSON.parse(await fs.readFile(statusFile,'utf8'));
-      if(status.failed)trace.launchFailed=true;
+      if(status.failed){trace.launchFailed=true;trace.failureCode=/operation.*running|operation.*finish/i.test(status.error||'')?'theme-busy':'app-start-failed';}
+      if(status.warning)trace.warning=status.warning;
       if(status.window)trace.window={x:status.x,y:status.y,width:status.width,height:status.height};
       const testDelay=Math.min(30000,Math.max(0,Number(process.env.APP_BOOT_TEST_READY_DELAY_MS)||0));
       let themeReady=!status.themeRequired;

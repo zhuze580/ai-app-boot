@@ -48,6 +48,8 @@ while([DateTime]::UtcNow -lt $deadline) {
 }
 if(-not $trace -or $trace.reason -ne 'ready-after-film'){throw ($App+': splash failed or timed out')}
 $first=[DateTime]::Parse($trace.firstFrameAt).ToUniversalTime()
+$requested=[DateTime]::Parse($trace.appLaunchRequestedAt).ToUniversalTime()
+if(($requested-$first).TotalMilliseconds -lt 0 -or ($requested-$first).TotalMilliseconds -gt 500){throw 'Application did not start with the video first frame'}
 $ended=[DateTime]::Parse($trace.filmEndedAt).ToUniversalTime()
 $ready=[DateTime]::Parse($trace.appReadyAt).ToUniversalTime()
 $finished=[DateTime]::Parse($trace.finishedAt).ToUniversalTime()
@@ -60,4 +62,4 @@ if($handoffWindow -eq [IntPtr]::Zero -or -not [AppBootNative]::Visible($handoffW
 $screen=[AppBootNative]::ScreenBounds($handoffWindow);$bounds=New-Object AppBootNative+Rect
 [AppBootNative]::GetWindowRect($handoffWindow,[ref]$bounds) | Out-Null
 if($bounds.Left -ne $screen.Left -or $bounds.Top -ne $screen.Top -or $bounds.Right -ne $screen.Right -or $bounds.Bottom -ne $screen.Bottom){throw 'Application did not stay fullscreen after playback'}
-[pscustomobject]@{App=$App;Delayed=[bool]$Delayed;FullFilm=$true;GeometryMatched=$geometry;ReadySeconds=[Math]::Round(($ready-$first).TotalSeconds,2);FilmSeconds=[Math]::Round(($ended-$first).TotalSeconds,2);Result='PASS'} | ConvertTo-Json -Compress
+[pscustomobject]@{App=$App;Delayed=[bool]$Delayed;ParallelStartMs=($requested-$first).TotalMilliseconds;FullFilm=$true;GeometryMatched=$geometry;ReadySeconds=[Math]::Round(($ready-$first).TotalSeconds,2);FilmSeconds=[Math]::Round(($ended-$first).TotalSeconds,2);Result='PASS'} | ConvertTo-Json -Compress

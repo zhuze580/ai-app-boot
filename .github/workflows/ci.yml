@@ -20,4 +20,11 @@ jobs:
           }
           Add-Type -AssemblyName Accessibility
           Add-Type -Path scripts/Native.cs -ReferencedAssemblies Accessibility,System,System.Core
+      - name: Theme startup regression checks
+        shell: powershell
+        run: |
+          & ./tests/theme-start.ps1
+          if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
+          & ./tests/theme-recovery.ps1
+          & ./tests/theme-session-start.ps1
       - run: npm run test:browser

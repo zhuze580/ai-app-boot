@@ -69,7 +69,32 @@ function Get-TargetWindow($Target) {
     return [IntPtr]::Zero
 }
 
+function Test-CodexThemeRecoveryNeeded($Target, [string]$ThemeRoot) {
+    if($Target.App -ne 'Codex' -or -not (Test-Path -LiteralPath (Join-Path $ThemeRoot 'active-theme\theme.json')) -or
+        (Test-Path -LiteralPath (Join-Path $ThemeRoot 'paused'))) {return $false}
+    try {
+        $state=Get-Content -LiteralPath (Join-Path $ThemeRoot 'state.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        if($state.codexExe -ine $Target.Exe -or $state.port -lt 1024 -or $state.port -gt 65535){return $true}
+        $owners=@(Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort $state.port -State Listen -ErrorAction Stop | Select-Object -ExpandProperty OwningProcess -Unique)
+        if($owners.Count -ne 1 -or (Get-Process -Id $owners[0] -ErrorAction Stop).Path -ine $Target.Exe){return $true}
+        $version=Invoke-RestMethod ('http://127.0.0.1:'+$state.port+'/json/version') -TimeoutSec 2
+        return $version.webSocketDebuggerUrl -cne ('ws://127.0.0.1:'+$state.port+'/devtools/browser/'+$state.browserId)
+    }catch{return $true}
+}
+
 function Start-TargetApp($Target) {
+    . (Join-Path $PSScriptRoot 'theme-start.ps1')
+    $themeRoot=Join-Path $env:LOCALAPPDATA 'CodexDreamSkin'
+    $themeStart=Join-Path $themeRoot 'engine\scripts\start-dream-skin.ps1'
+    if($Target.App -eq 'Codex' -and (Test-Path -LiteralPath $themeStart)) {
+        $running=@(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Target.Exe)) -ErrorAction SilentlyContinue | Where-Object {$_.Path -ieq $Target.Exe})
+        if($running.Count -gt 0 -and (Test-CodexThemeRecoveryNeeded $Target $themeRoot)) {
+            # An updater can relaunch Codex without its theme endpoint. Ask before
+            # replacing a live app; never silently accept an unthemed window.
+            Start-AppBootThemeSession $themeRoot -ExpectedExe $Target.Exe -AllowRestart:($env:APP_BOOT_REPAIR_RESTART -eq '1')
+            return
+        }
+    }
     $window = Get-TargetWindow $Target
     if ($window -ne [IntPtr]::Zero) {
         [AppBootNative]::Restore($window)
@@ -88,7 +113,10 @@ function Start-TargetApp($Target) {
     $dreamStart = Join-Path $dreamRoot 'engine\scripts\start-dream-skin.ps1'
     if ($Target.App -eq 'Codex' -and (Test-Path -LiteralPath $dreamStart)) {
         $existing=@(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Target.Exe)) -ErrorAction SilentlyContinue|Where-Object {$_.Path -ieq $Target.Exe})
-        if($existing.Count -eq 0){& $dreamStart | Out-Null;return}
+        if($existing.Count -eq 0){
+            Start-AppBootThemeSession $dreamRoot -ExpectedExe $Target.Exe
+            return
+        }
         $state = $null
         try { $state=Get-Content (Join-Path $dreamRoot 'state.json') -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
         if ($state -and $state.codexExe -ieq $Target.Exe) {

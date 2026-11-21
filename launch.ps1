@@ -49,7 +49,12 @@ try {
         if ($Action -eq 'Preview') {$arguments+='--preview'}
         if ($Muted) {$arguments+='--muted'}
         & $node @arguments
-        if ($LASTEXITCODE -ne 0) {throw 'Application launch failed. Run this command with -Action Check to inspect dependencies and appPath.'}
+        if ($LASTEXITCODE -ne 0) {
+            $logPath=Join-Path $env:LOCALAPPDATA ('AIAppBoot\last-'+$App.ToLower()+'.json')
+            $lastLaunch=$null;try{$lastLaunch=Get-Content -LiteralPath $logPath -Raw -Encoding UTF8|ConvertFrom-Json}catch{}
+            if($lastLaunch.failureCode -eq 'theme-busy'){throw '壁纸服务仍在完成另一个启动操作。请等待该操作结束，再点击一次启动入口。'}
+            throw ('应用启动未完成，请查看本机诊断记录：'+$logPath)
+        }
         exit $LASTEXITCODE
     } finally {
         if ($held) {$mutex.ReleaseMutex()}

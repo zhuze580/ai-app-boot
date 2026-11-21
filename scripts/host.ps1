@@ -38,7 +38,12 @@ try {
     do {$splash=[AppBootNative]::Find([uint32]$ChromePid);if($splash -ne [IntPtr]::Zero){break};Start-Sleep -Milliseconds 50}while([DateTime]::UtcNow -lt $splashDeadline)
     if($splash -eq [IntPtr]::Zero){throw 'Splash native window not ready'}
     [AppBootNative]::Cover($splash,[AppBootNative]::ScreenBounds($splash)) | Out-Null
-    Start-TargetApp $target
+    $startupWarning=$null
+    try {Start-TargetApp $target} catch {
+        $visibleWindow=Get-TargetWindow $target
+        if($visibleWindow -eq [IntPtr]::Zero){throw}
+        $startupWarning='theme-recovery-incomplete'
+    }
     $consecutive=0;$ready=$false;$lastRect='';$mainWindow=[IntPtr]::Zero;$screenKey=''
     $themeRequired=$App -eq 'Codex' -and (Test-Path (Join-Path $env:LOCALAPPDATA 'CodexDreamSkin\engine\scripts\injector.mjs'))
     $nextConnectionCheck=[DateTime]::MinValue;$themeWatcherAlive=$false
@@ -47,6 +52,7 @@ try {
         if ($chrome.HasExited) { break }
         $window=Get-TargetWindow $target
         $status=@{app=$App;ready=$false;failed=$false}
+        if($startupWarning){$status.warning=$startupWarning}
         if($themeRequired){
             $status.themeRequired=$false
             if([DateTime]::UtcNow -ge $nextConnectionCheck){
